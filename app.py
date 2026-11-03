@@ -171,7 +171,8 @@ def analyze_frame_dynamically(frame):
 
 def run_camera_test(cam):
     source = cam["source"]
-    if not source.startswith("rtsp://") and not source.startswith("http://"):
+    is_live = source.startswith("rtsp://") or source.startswith("http://")
+    if not is_live:
         source = os.path.join(BASE_DIR, source) if not os.path.isabs(source) else source
 
     cap = cv2.VideoCapture(source)
@@ -180,7 +181,16 @@ def run_camera_test(cam):
         cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
         return
 
-    ret, frame = cap.read()
+    ret, frame = False, None
+    if is_live:
+        # Flush stream buffer for live feeds to get the latest frame
+        for _ in range(5):
+            ret, frame = cap.read()
+            if not ret:
+                break
+    else:
+        ret, frame = cap.read()
+
     cap.release()
 
     if not ret or frame is None:

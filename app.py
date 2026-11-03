@@ -259,6 +259,10 @@ def run_camera_test(cam, duration_sec=0):
 
         start_time = time.time()
         totals, occs, vacs, last_seats = [], [], [], []
+        frame_idx = 0
+        FRAME_STRIDE = 2
+        cached_seats = []
+        cached_tot, cached_occ, cached_vac = 0, 0, 0
         
         while time.time() - start_time < duration_sec:
             ret, frame = cap.read()
@@ -268,15 +272,17 @@ def run_camera_test(cam, duration_sec=0):
                 if not ret:
                     break
             
-            tot, occ, vac, seats = analyze_frame_dynamically(frame, person_conf, chair_conf)
-            totals.append(tot)
-            occs.append(occ)
-            vacs.append(vac)
-            last_seats = seats
+            frame_idx += 1
+            if frame_idx % FRAME_STRIDE == 0 or frame_idx == 1:
+                cached_tot, cached_occ, cached_vac, cached_seats = analyze_frame_dynamically(frame, person_conf, chair_conf)
+
+            totals.append(cached_tot)
+            occs.append(cached_occ)
+            vacs.append(cached_vac)
+            last_seats = cached_seats
             
-            rendered = render_display(frame, seats)
+            rendered = render_display(frame, cached_seats)
             out.write(rendered)
-            time.sleep(0.05)
 
         cap.release()
         out.release()

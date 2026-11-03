@@ -201,7 +201,9 @@
     <div class="modal video-modal">
         <h3 id="videoModalTitle">Recorded 5s Accuracy Test</h3>
         <div class="form-row">
-            <video id="testVideoPlayer" controls autoplay></video>
+            <video id="testVideoPlayer" controls autoplay>
+                Your browser does not support the video tag.
+            </video>
         </div>
         <div class="modal-actions">
             <button type="button" class="btn btn-edit" onclick="closeVideoModal()">Close</button>
@@ -292,8 +294,9 @@ function openVideoModal(videoUrl, camName) {
     document.getElementById('videoModalTitle').innerText = `Recorded 5s Test - ${camName}`;
     const player = document.getElementById('testVideoPlayer');
     player.src = videoUrl;
+    player.load();
     document.getElementById('videoModal').style.display = 'flex';
-    player.play();
+    player.play().catch(err => console.log("Autoplay prevented:", err));
 }
 
 function closeVideoModal() {

@@ -7,6 +7,7 @@ import asyncio
 import cv2
 import numpy as np
 import torch
+import pymongo
 from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -22,8 +23,13 @@ torch.backends.cudnn.benchmark = True
 
 # ================= Setup & Models =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, ".camera_store.json")
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+
+# MongoDB Setup
+MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017/")
+mongo_client = pymongo.MongoClient(MONGO_URL)
+db = mongo_client["libedge_db"]
+cameras_collection = db["cameras"]
 
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 
@@ -48,13 +54,12 @@ CAMERAS = []
 
 def load_internal_store():
     global CAMERAS
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r") as f:
-                CAMERAS = json.load(f)
-        except Exception:
-            CAMERAS = []
-    else:
+    try:
+        CAMERAS = list(cameras_collection.find({}, {"_id": False}))
+    except Exception:
+        CAMERAS = []
+        
+    if not CAMERAS:
         # Default seed entry without manual total_seats
         CAMERAS = [
             {
@@ -75,8 +80,12 @@ def load_internal_store():
 
 
 def persist_store():
-    with open(DB_FILE, "w") as f:
-        json.dump(CAMERAS, f, indent=2)
+    for cam in CAMERAS:
+        cameras_collection.update_one(
+            {"id": cam["id"]},
+            {"$set": cam},
+            upsert=True
+        )
 
 
 # ================= Dynamic Geometry & Association =================
@@ -270,6 +279,7 @@ async def save_camera(data: CameraModel):
 async def delete_camera(cam_id: str):
     global CAMERAS
     CAMERAS = [c for c in CAMERAS if c["id"] != cam_id]
+    cameras_collection.delete_one({"id": cam_id})
     persist_store()
     return {"status": "deleted"}
 

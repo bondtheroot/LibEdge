@@ -246,15 +246,15 @@ def run_camera_test(cam, duration_sec=0):
         return
 
     if duration_sec > 0:
-        # 5-second accuracy test recording window
-        out_path = os.path.join(OUTPUTS_DIR, f"{cam['id']}_test.mp4")
+        # 5-second accuracy test recording window (.webm format using VP80 for browser compatibility)
+        out_path = os.path.join(OUTPUTS_DIR, f"{cam['id']}_test.webm")
         native_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
         native_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
         fps = cap.get(cv2.CAP_PROP_FPS)
         if fps <= 0 or np.isnan(fps):
             fps = 25.0
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fourcc = cv2.VideoWriter_fourcc(*"VP80")
         out = cv2.VideoWriter(out_path, fourcc, fps, (native_w, native_h))
 
         start_time = time.time()
@@ -290,7 +290,7 @@ def run_camera_test(cam, duration_sec=0):
         cam["occupied"] = int(round(sum(occs) / len(occs)))
         cam["vacant"] = int(round(sum(vacs) / len(vacs)))
         cam["seats"] = last_seats
-        cam["output_video"] = f"/outputs/{cam['id']}_test.mp4"
+        cam["output_video"] = f"/outputs/{cam['id']}_test.webm"
         cam["status"] = "Active (5s Accuracy Tested)"
     else:
         ret, frame = False, None

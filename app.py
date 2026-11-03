@@ -205,7 +205,12 @@ def analyze_frame_dynamically(frame, person_conf=0.25, chair_conf=0.17):
     return total_seats, occupied_count, vacant_count, structured_seats
 
 
-def run_camera_test(cam):
+def run_camera_test(cam, duration_sec=0):
+    """
+    If duration_sec > 0, records/samples video frames over that duration (e.g. 5 seconds),
+    runs analysis on them, and averages the results for robust accuracy testing.
+    Otherwise, performs a fast single-frame test.
+    """
     source = cam["source"]
     person_conf = float(cam.get("person_conf", 0.25))
     chair_conf = float(cam.get("chair_conf", 0.17))
@@ -219,28 +224,66 @@ def run_camera_test(cam):
         cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
         return
 
-    ret, frame = False, None
-    if is_live:
-        for _ in range(5):
+    if duration_sec > 0:
+        # 5-second accuracy test window
+        start_time = time.time()
+        totals, occs, vacs, last_seats = [], [], [], []
+        
+        while time.time() - start_time < duration_sec:
             ret, frame = cap.read()
             if not ret:
-                break
+                # If video file ends, loop back to start for accuracy testing
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ret, frame = cap.read()
+                if not ret:
+                    break
+            
+            tot, occ, vac, seats = analyze_frame_dynamically(frame, person_conf, chair_conf)
+            totals.append(tot)
+            occs.append(occ)
+            vacs.append(vac)
+            last_seats = seats
+            
+            # Small throttle to prevent CPU choking during high FPS test
+            time.sleep(0.1)
+
+        cap.release()
+
+        if not totals:
+            cam["status"] = "No Video Signal"
+            cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
+            return
+
+        # Compute rounded averages across the 5-second accuracy test window
+        cam["total_seats"] = int(round(sum(totals) / len(totals)))
+        cam["occupied"] = int(round(sum(occs) / len(occs)))
+        cam["vacant"] = int(round(sum(vacs) / len(vacs)))
+        cam["seats"] = last_seats
+        cam["status"] = "Active (5s Accuracy Tested)"
     else:
-        ret, frame = cap.read()
+        ret, frame = False, None
+        if is_live:
+            for _ in range(5):
+                ret, frame = cap.read()
+                if not ret:
+                    break
+        else:
+            ret, frame = cap.read()
 
-    cap.release()
+        cap.release()
 
-    if not ret or frame is None:
-        cam["status"] = "No Video Signal"
-        cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
-        return
+        if not ret or frame is None:
+            cam["status"] = "No Video Signal"
+            cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
+            return
 
-    total, occ, vac, seats = analyze_frame_dynamically(frame, person_conf, chair_conf)
-    cam["total_seats"] = total
-    cam["occupied"] = occ
-    cam["vacant"] = vac
-    cam["seats"] = seats
-    cam["status"] = "Active"
+        total, occ, vac, seats = analyze_frame_dynamically(frame, person_conf, chair_conf)
+        cam["total_seats"] = total
+        cam["occupied"] = occ
+        cam["vacant"] = vac
+        cam["seats"] = seats
+        cam["status"] = "Active"
+
     cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
 
 
@@ -255,7 +298,7 @@ async def background_scheduler():
             interval = int(cam.get("interval_sec", 30))
             if now - last_exec.get(cid, 0) >= interval:
                 last_exec[cid] = now
-                await asyncio.to_thread(run_camera_test, cam)
+                await asyncio.to_thread(run_camera_test, cam, 0)
                 updated = True
         if updated:
             persist_store()
@@ -343,7 +386,8 @@ async def delete_camera(cam_id: str):
 async def test_camera_now(cam_id: str):
     for c in CAMERAS:
         if c["id"] == cam_id:
-            await asyncio.to_thread(run_camera_test, c)
+            # Trigger 5-second accuracy test
+            await asyncio.to_thread(run_camera_test, c, 5.0)
             persist_store()
             return {
                 "status": "success", 

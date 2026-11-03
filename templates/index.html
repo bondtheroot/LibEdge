@@ -237,10 +237,10 @@ async function fetchAndRender() {
                     <span class="pill pill-vac">${vac} Vac</span>
                 </td>
                 <td>
-                    <span class="pill pill-status ${cam.status === 'Active' ? 'active' : ''}">${cam.last_tested}</span>
+                    <span class="pill pill-status ${cam.status.includes('Active') ? 'active' : ''}">${cam.last_tested}</span>
                 </td>
                 <td style="text-align: right">
-                    <button class="btn btn-test" onclick="triggerTest('${cam.id}')">Test Now</button>
+                    <button class="btn btn-test" onclick="triggerTest('${cam.id}')" title="Record & Test 5s Window">5s Accuracy Test</button>
                     <button class="btn btn-edit" onclick="editCamera('${cam.id}')">Edit</button>
                     <button class="btn btn-del" onclick="deleteCamera('${cam.id}')">Delete</button>
                 </td>
@@ -315,13 +315,16 @@ async function deleteCamera(id) {
 
 async function triggerTest(id) {
     const btn = event.target;
-    btn.innerText = 'Sampling...';
+    const originalText = btn.innerText;
+    btn.innerText = 'Testing 5s...';
     btn.disabled = true;
     try {
-        await fetch(`/api/cameras/${id}/test-now`, { method: 'POST' });
+        const res = await fetch(`/api/cameras/${id}/test-now`, { method: 'POST' });
+        const data = await res.json();
         await fetchAndRender();
+        alert(`5s Accuracy Test Complete!\nTotal Seats: ${data.total_seats}\nOccupied: ${data.occupied}\nVacant: ${data.vacant}`);
     } finally {
-        btn.innerText = 'Test Now';
+        btn.innerText = originalText;
         btn.disabled = false;
     }
 }

@@ -3,79 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LibEdge // Zone & Floor Manager</title>
+    <title>LibEdge // Intelligent Seat Topology & Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #090d16;
-            --surface: #111827;
-            --surface-hover: #1f2937;
-            --border: #263346;
+            --bg-base: #07090e;
+            --bg-surface: #0f1623;
+            --bg-surface-hover: #161f33;
+            --border-subtle: #1e293b;
+            --border-focus: #38bdf8;
             --primary: #0284c7;
             --primary-hover: #0369a1;
-            --text-main: #f3f4f6;
-            --text-muted: #9ca3af;
-            --badge-green: #059669;
-            --badge-blue: #2563eb;
-            --badge-total: #64748b;
-            --danger: #dc2626;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dimmed: #64748b;
+            --accent-green: #10b981;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --danger: #ef4444;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background: var(--bg); color: var(--text-main); padding: 2rem; }
-        .wrapper { max-width: 1240px; margin: 0 auto; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg-base); color: var(--text-main); padding: 2.5rem 1.5rem; min-height: 100vh; }
+        .wrapper { max-width: 1320px; margin: 0 auto; }
 
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.8rem; }
-        .brand { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; color: #38bdf8; }
-        .brand span { color: var(--text-muted); font-weight: 400; font-size: 0.9rem; margin-left: 0.5rem; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--border-subtle); }
+        .brand { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; color: var(--text-main); display: flex; align-items: center; gap: 0.75rem; }
+        .brand .logo-badge { background: linear-gradient(135deg, var(--primary), var(--accent-blue)); width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 700; color: white; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4); }
+        .brand span { color: var(--text-muted); font-weight: 400; font-size: 0.95rem; }
 
-        .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
-        .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem; }
-        .summary-card small { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 600; }
-        .summary-card .val { font-size: 1.6rem; font-weight: 700; margin-top: 0.2rem; }
-
-        .table-container { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-        .table-header-row { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.4rem; border-bottom: 1px solid var(--border); }
-        .table-header-row h2 { font-size: 1rem; font-weight: 600; }
+        .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; margin-bottom: 2.5rem; }
+        .summary-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 1.25rem 1.5rem; box-shadow: var(--shadow-card); position: relative; overflow: hidden; }
+        .summary-card::after { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--border-subtle); }
+        .summary-card:nth-child(1)::after { background: var(--accent-blue); }
+        .summary-card:nth-child(2)::after { background: var(--accent-purple); }
+        .summary-card:nth-child(3)::after { background: var(--accent-blue); }
+        .summary-card:nth-child(4)::after { background: var(--accent-green); }
         
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.85rem 1.2rem; text-align: left; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        .summary-card small { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+        .summary-card .val { font-size: 2rem; font-weight: 700; margin-top: 0.3rem; letter-spacing: -1px; }
+
+        .table-container { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); overflow: hidden; }
+        .table-header-row { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.75rem; border-bottom: 1px solid var(--border-subtle); background: rgba(15, 22, 35, 0.5); }
+        .table-header-row h2 { font-size: 1.1rem; font-weight: 600; color: var(--text-main); }
+        
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 1.1rem 1.75rem; font-size: 0.9rem; border-bottom: 1px solid var(--border-subtle); }
+        th { color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(7, 9, 14, 0.3); }
         tr:last-child td { border-bottom: none; }
-        tr:hover td { background: var(--surface-hover); }
+        tr:hover td { background: var(--bg-surface-hover); }
 
-        .pill { padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
-        .pill-tot { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; }
-        .pill-occ { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
-        .pill-vac { background: rgba(5, 150, 105, 0.2); color: #34d399; }
-        .pill-status { background: #1e293b; color: #cbd5e1; }
-        .pill-status.active { color: #4ade80; }
+        .pill { display: inline-block; padding: 0.25rem 0.65rem; border-radius: 20px; font-weight: 600; font-size: 0.75rem; margin-right: 0.3rem; }
+        .pill-tot { background: rgba(100, 116, 139, 0.15); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.3); }
+        .pill-occ { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .pill-vac { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .pill-status { background: rgba(30, 41, 59, 0.6); color: var(--text-muted); border: 1px solid var(--border-subtle); }
+        .pill-status.active { color: #34d399; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
 
-        .btn { padding: 0.5rem 0.9rem; border-radius: 4px; border: none; font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: 0.15s; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-edit { background: #374151; color: #f3f4f6; margin-right: 0.4rem; }
-        .btn-edit:hover { background: #4b5563; }
-        .btn-test { background: #0284c7; color: white; margin-right: 0.4rem; }
-        .btn-test:hover { background: #0369a1; }
-        .btn-del { background: transparent; color: #ef4444; border: 1px solid #7f1d1d; }
-        .btn-del:hover { background: #7f1d1d; color: white; }
+        .btn { padding: 0.55rem 1rem; border-radius: var(--radius-sm); border: none; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.4rem; }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3); }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-edit { background: #1e293b; color: var(--text-main); border: 1px solid var(--border-subtle); margin-right: 0.3rem; }
+        .btn-edit:hover { background: #334155; }
+        .btn-test { background: rgba(2, 132, 199, 0.15); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.3); margin-right: 0.3rem; }
+        .btn-test:hover { background: rgba(2, 132, 199, 0.25); }
+        .btn-del { background: transparent; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+        .btn-del:hover { background: rgba(239, 68, 68, 0.15); }
 
-        .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px); z-index: 100; align-items: center; justify-content: center; }
-        .modal { background: var(--surface); border: 1px solid var(--border); width: 100%; max-width: 500px; border-radius: 8px; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        .modal h3 { font-size: 1.1rem; margin-bottom: 1.2rem; }
-        .form-row { margin-bottom: 1rem; }
+        .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(7, 9, 14, 0.8); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
+        .modal { background: var(--bg-surface); border: 1px solid var(--border-subtle); width: 100%; max-width: 540px; border-radius: var(--radius-lg); padding: 2rem; box-shadow: 0 20px 40px rgba(0,0,0,0.7); animation: modalIn 0.25s ease-out; }
+        @keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        
+        .modal h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-main); }
+        .form-row { margin-bottom: 1.2rem; }
         .form-row.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 0.3rem; }
-        input, select { width: 100%; background: #090d16; border: 1px solid var(--border); border-radius: 4px; padding: 0.55rem; color: white; font-size: 0.85rem; }
-        input:focus, select:focus { outline: 1px solid var(--primary); border-color: var(--primary); }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1.5rem; }
+        label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 0.4rem; letter-spacing: 0.5px; }
+        input, select { width: 100%; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.65rem 0.85rem; color: var(--text-main); font-size: 0.9rem; transition: border-color 0.15s; }
+        input:focus, select:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 2rem; }
     </style>
 </head>
 <body>
 
 <div class="wrapper">
     <header>
-        <div class="brand">LibEdge<span>// Multi-Camera Dynamic Topology</span></div>
+        <div class="brand">
+            <div class="logo-badge">LE</div>
+            LibEdge <span>// Dynamic Seat Topology & Analytics</span>
+        </div>
         <button class="btn btn-primary" onclick="openModal()">+ Add New Camera</button>
     </header>
 
@@ -198,15 +219,18 @@ async function fetchAndRender() {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>
-                    <strong>${cam.floor}</strong><br>
-                    <span style="color:var(--text-muted); font-size:0.75rem">${cam.zone}</span>
+                    <strong style="color:var(--text-main)">${cam.floor}</strong><br>
+                    <span style="color:var(--text-muted); font-size:0.8rem">${cam.zone}</span>
                 </td>
                 <td>
-                    <strong>${cam.name}</strong><br>
-                    <span style="font-family:monospace; color:var(--text-muted); font-size:0.75rem">${cam.id}</span>
+                    <strong style="color:var(--text-main)">${cam.name}</strong><br>
+                    <span style="font-family:monospace; color:var(--text-dimmed); font-size:0.75rem">${cam.id}</span>
                 </td>
-                <td><code style="color:#38bdf8; font-size:0.75rem">${cam.source}</code></td>
-                <td>Every ${cam.interval_sec}s<br><span style="color:var(--text-muted); font-size:0.75rem">P-Conf: ${pConf} | C-Conf: ${cConf}</span></td>
+                <td><code style="color:#38bdf8; font-size:0.8rem; background:rgba(56,189,248,0.1); padding:0.15rem 0.4rem; border-radius:4px;">${cam.source}</code></td>
+                <td>
+                    <span style="font-weight:500;">Every ${cam.interval_sec}s</span><br>
+                    <span style="color:var(--text-dimmed); font-size:0.75rem">P:${pConf} | C:${cConf}</span>
+                </td>
                 <td>
                     <span class="pill pill-tot">${seats} Total</span>
                     <span class="pill pill-occ">${occ} Occ</span>

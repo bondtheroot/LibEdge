@@ -150,13 +150,8 @@
                 <input type="text" id="m_source" placeholder="dataset/raw/library.mp4 or rtsp://..." required>
             </div>
             <div class="form-row">
-                <label>Sampling Frequency</label>
-                <select id="m_interval">
-                    <option value="15">Every 15 Seconds</option>
-                    <option value="30" selected>Every 30 Seconds</option>
-                    <option value="60">Every 1 Minute</option>
-                    <option value="120">Every 2 Minutes</option>
-                </select>
+                <label>Sampling Frequency (Seconds)</label>
+                <input type="number" id="m_interval" min="1" value="30" required>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-edit" onclick="closeModal()">Cancel</button>

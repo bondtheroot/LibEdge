@@ -6,14 +6,14 @@ LibEdge is a real-time computer vision and IoT management system designed to mon
 
 - **AI-Powered Occupancy Detection:** Uses YOLOv11 pose estimation and object detection to identify chairs and people in sitting postures.
 - **Dynamic Association:** Associates sitting individuals with chairs using bounding box intersection (IoU) and keypoint analysis.
-- **MongoDB Backend:** Persists camera configurations, streams, and latest occupancy metrics.
+- **MongoDB Backend:** Persists camera configurations, streams, and latest occupancy metrics via MongoDB URIs.
 - **Background Polling Scheduler:** Automatically samples camera video feeds at configured intervals (e.g., 15s, 30s, 60s).
 - **Modern Web Dashboard:** Real-time metrics summary, camera CRUD operations, and live test triggers.
 
 ## Prerequisites
 
 - Python 3.10+
-- MongoDB instance running locally or remotely (`mongodb://localhost:27017/`)
+- MongoDB instance (local or cloud-hosted via connection URI, e.g., `mongodb+srv://user:pass@cluster.mongodb.net/`)
 - PyTorch and Ultralytics YOLO dependencies
 - OpenCV
 
@@ -24,9 +24,9 @@ LibEdge is a real-time computer vision and IoT management system designed to mon
    ```bash
    pip install fastapi uvicorn pymongo opencv-python ultralytics torch jinja2 pydantic
    ```
-3. Ensure MongoDB is running:
+3. Configure your MongoDB connection URI (optional, defaults to `mongodb://localhost:27017/`):
    ```bash
-   mongod --dbpath /path/to/your/db
+   export MONGO_URL="mongodb://localhost:27017/"
    ```
 
 ## Running the Application

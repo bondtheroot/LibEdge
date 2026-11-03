@@ -60,7 +60,7 @@ def load_internal_store():
         CAMERAS = []
         
     if not CAMERAS:
-        # Default seed entry without manual total_seats
+        # Default seed entry with conf_threshold
         CAMERAS = [
             {
                 "id": "cam_01",
@@ -69,6 +69,7 @@ def load_internal_store():
                 "zone": "Quiet Zone A",
                 "source": "dataset/raw/library.mp4",
                 "interval_sec": 30,
+                "conf_threshold": 0.25,
                 "total_seats": 0,
                 "occupied": 0,
                 "vacant": 0,
@@ -117,13 +118,13 @@ def compute_iou(boxA, boxB):
     return (inter / union) if union > 0 else 0
 
 
-def analyze_frame_dynamically(frame):
-    """Detects chairs and sitting people dynamically from the frame."""
+def analyze_frame_dynamically(frame, conf_threshold=0.25):
+    """Detects chairs and sitting people dynamically from the frame using a given confidence threshold."""
     h, w = frame.shape[:2]
     imgsz = min(max(w, h), 960)
 
     # 1. Pose estimation for people
-    pose_res = pose_model.predict(frame, imgsz=imgsz, conf=0.25, device=DEVICE, verbose=False)[0]
+    pose_res = pose_model.predict(frame, imgsz=imgsz, conf=conf_threshold, device=DEVICE, verbose=False)[0]
     seated_people = []
     if pose_res.keypoints is not None:
         boxes = pose_res.boxes.xyxy.cpu().numpy().astype(int)
@@ -140,8 +141,9 @@ def analyze_frame_dynamically(frame):
                     hy = float(boxes[i][1] + (boxes[i][3] - boxes[i][1]) * 0.75)
                 seated_people.append({"box": boxes[i], "hip": (hx, hy)})
 
-    # 2. Chair detection (Class 56)
-    detect_res = detect_model.predict(frame, imgsz=imgsz, classes=[56], conf=0.17, device=DEVICE, verbose=False)[0]
+    # 2. Chair detection (Class 56) - scale chair conf slightly relative to base threshold
+    chair_conf = max(0.05, conf_threshold - 0.08)
+    detect_res = detect_model.predict(frame, imgsz=imgsz, classes=[56], conf=chair_conf, device=DEVICE, verbose=False)[0]
     raw_chairs = []
     for box in detect_res.boxes:
         b = box.xyxy[0].cpu().numpy().astype(int)
@@ -171,6 +173,7 @@ def analyze_frame_dynamically(frame):
 
 def run_camera_test(cam):
     source = cam["source"]
+    conf_threshold = float(cam.get("conf_threshold", 0.25))
     is_live = source.startswith("rtsp://") or source.startswith("http://")
     if not is_live:
         source = os.path.join(BASE_DIR, source) if not os.path.isabs(source) else source
@@ -198,7 +201,7 @@ def run_camera_test(cam):
         cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
         return
 
-    total, occ, vac = analyze_frame_dynamically(frame)
+    total, occ, vac = analyze_frame_dynamically(frame, conf_threshold)
     cam["total_seats"] = total
     cam["occupied"] = occ
     cam["vacant"] = vac
@@ -241,7 +244,8 @@ class CameraModel(BaseModel):
     floor: str
     zone: str
     source: str
-    interval_sec: int  # No total_seats required
+    interval_sec: int
+    conf_threshold: float = 0.25
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -264,6 +268,7 @@ async def save_camera(data: CameraModel):
             CAMERAS[i]["zone"] = data.zone
             CAMERAS[i]["source"] = data.source
             CAMERAS[i]["interval_sec"] = data.interval_sec
+            CAMERAS[i]["conf_threshold"] = data.conf_threshold
             persist_store()
             return {"status": "updated"}
 
@@ -274,6 +279,7 @@ async def save_camera(data: CameraModel):
         "zone": data.zone,
         "source": data.source,
         "interval_sec": data.interval_sec,
+        "conf_threshold": data.conf_threshold,
         "total_seats": 0,
         "occupied": 0,
         "vacant": 0,

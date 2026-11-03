@@ -24,6 +24,8 @@ torch.backends.cudnn.benchmark = True
 # ================= Setup & Models =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+OUTPUTS_DIR = os.path.join(BASE_DIR, "outputs")
+os.makedirs(OUTPUTS_DIR, exist_ok=True)
 
 # MongoDB Setup
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017/")
@@ -75,6 +77,7 @@ def load_internal_store():
                 "occupied": 0,
                 "vacant": 0,
                 "seats": [],
+                "output_video": "",
                 "last_tested": "Never",
                 "status": "Initialized"
             }
@@ -205,12 +208,30 @@ def analyze_frame_dynamically(frame, person_conf=0.25, chair_conf=0.17):
     return total_seats, occupied_count, vacant_count, structured_seats
 
 
+def render_display(frame, structured_seats):
+    overlay = frame.copy()
+    occ_count = sum(1 for s in structured_seats if s["status"] == "Occupied")
+    vac_count = sum(1 for s in structured_seats if s["status"] == "Vacant")
+
+    for s in structured_seats:
+        b = s["box"]
+        is_occ = s["status"] == "Occupied"
+        color = (52, 152, 219) if is_occ else (46, 204, 113)
+        
+        if not is_occ:
+            cv2.rectangle(overlay, (b[0], b[1]), (b[2], b[3]), color, -1)
+        cv2.rectangle(frame, (b[0], b[1]), (b[2], b[3]), color, 2)
+        cv2.putText(frame, f"{s['seat_id']}", (b[0], max(18, b[1] - 6)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+
+    banner = f"Vacant: {vac_count}  |  Occupied: {occ_count}"
+    cv2.rectangle(frame, (8, 6), (280, 36), (20, 20, 20), -1)
+    cv2.putText(frame, banner, (14, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (255, 255, 255), 1, cv2.LINE_AA)
+
+    return cv2.addWeighted(overlay, 0.20, frame, 0.80, 0)
+
+
 def run_camera_test(cam, duration_sec=0):
-    """
-    If duration_sec > 0, records/samples video frames over that duration (e.g. 5 seconds),
-    runs analysis on them, and averages the results for robust accuracy testing.
-    Otherwise, performs a fast single-frame test.
-    """
     source = cam["source"]
     person_conf = float(cam.get("person_conf", 0.25))
     chair_conf = float(cam.get("chair_conf", 0.17))
@@ -225,14 +246,23 @@ def run_camera_test(cam, duration_sec=0):
         return
 
     if duration_sec > 0:
-        # 5-second accuracy test window
+        # 5-second accuracy test recording window
+        out_path = os.path.join(OUTPUTS_DIR, f"{cam['id']}_test.mp4")
+        native_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)) or 1280
+        native_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 720
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps <= 0 or np.isnan(fps):
+            fps = 25.0
+
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(out_path, fourcc, fps, (native_w, native_h))
+
         start_time = time.time()
         totals, occs, vacs, last_seats = [], [], [], []
         
         while time.time() - start_time < duration_sec:
             ret, frame = cap.read()
             if not ret:
-                # If video file ends, loop back to start for accuracy testing
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 ret, frame = cap.read()
                 if not ret:
@@ -244,21 +274,23 @@ def run_camera_test(cam, duration_sec=0):
             vacs.append(vac)
             last_seats = seats
             
-            # Small throttle to prevent CPU choking during high FPS test
-            time.sleep(0.1)
+            rendered = render_display(frame, seats)
+            out.write(rendered)
+            time.sleep(0.05)
 
         cap.release()
+        out.release()
 
         if not totals:
             cam["status"] = "No Video Signal"
             cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
             return
 
-        # Compute rounded averages across the 5-second accuracy test window
         cam["total_seats"] = int(round(sum(totals) / len(totals)))
         cam["occupied"] = int(round(sum(occs) / len(occs)))
         cam["vacant"] = int(round(sum(vacs) / len(vacs)))
         cam["seats"] = last_seats
+        cam["output_video"] = f"/outputs/{cam['id']}_test.mp4"
         cam["status"] = "Active (5s Accuracy Tested)"
     else:
         ret, frame = False, None
@@ -314,6 +346,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LibEdge Camera & Zone Manager", lifespan=lifespan)
 
+# Mount outputs directory so rendered test videos can be viewed/downloaded
+from fastapi.staticfiles import StaticFiles
+app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
+
 
 # ================= REST Endpoints =================
 class CameraModel(BaseModel):
@@ -365,6 +401,7 @@ async def save_camera(data: CameraModel):
         "occupied": 0,
         "vacant": 0,
         "seats": [],
+        "output_video": "",
         "last_tested": "Pending",
         "status": "Initialized"
     }
@@ -386,7 +423,7 @@ async def delete_camera(cam_id: str):
 async def test_camera_now(cam_id: str):
     for c in CAMERAS:
         if c["id"] == cam_id:
-            # Trigger 5-second accuracy test
+            # Trigger 5-second accuracy test recording video
             await asyncio.to_thread(run_camera_test, c, 5.0)
             persist_store()
             return {
@@ -394,6 +431,7 @@ async def test_camera_now(cam_id: str):
                 "total_seats": c["total_seats"], 
                 "occupied": c["occupied"], 
                 "vacant": c["vacant"],
-                "seats": c["seats"]
+                "seats": c["seats"],
+                "output_video": c.get("output_video", "")
             }
     return JSONResponse(status_code=404, content={"status": "not found"})

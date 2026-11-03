@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LibEdge // Zone & Floor Manager</title>
+    <style>
+        :root {
+            --bg: #090d16;
+            --surface: #111827;
+            --surface-hover: #1f2937;
+            --border: #263346;
+            --primary: #0284c7;
+            --primary-hover: #0369a1;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --badge-green: #059669;
+            --badge-blue: #2563eb;
+            --badge-total: #64748b;
+            --danger: #dc2626;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text-main); padding: 2rem; }
+        .wrapper { max-width: 1240px; margin: 0 auto; }
+
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.8rem; }
+        .brand { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; color: #38bdf8; }
+        .brand span { color: var(--text-muted); font-weight: 400; font-size: 0.9rem; margin-left: 0.5rem; }
+
+        .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+        .summary-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem; }
+        .summary-card small { color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; font-weight: 600; }
+        .summary-card .val { font-size: 1.6rem; font-weight: 700; margin-top: 0.2rem; }
+
+        .table-container { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        .table-header-row { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.4rem; border-bottom: 1px solid var(--border); }
+        .table-header-row h2 { font-size: 1rem; font-weight: 600; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.85rem 1.2rem; text-align: left; font-size: 0.85rem; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-muted); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: var(--surface-hover); }
+
+        .pill { padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.75rem; }
+        .pill-tot { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; }
+        .pill-occ { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
+        .pill-vac { background: rgba(5, 150, 105, 0.2); color: #34d399; }
+        .pill-status { background: #1e293b; color: #cbd5e1; }
+        .pill-status.active { color: #4ade80; }
+
+        .btn { padding: 0.5rem 0.9rem; border-radius: 4px; border: none; font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: 0.15s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-edit { background: #374151; color: #f3f4f6; margin-right: 0.4rem; }
+        .btn-edit:hover { background: #4b5563; }
+        .btn-test { background: #0284c7; color: white; margin-right: 0.4rem; }
+        .btn-test:hover { background: #0369a1; }
+        .btn-del { background: transparent; color: #ef4444; border: 1px solid #7f1d1d; }
+        .btn-del:hover { background: #7f1d1d; color: white; }
+
+        .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(2px); z-index: 100; align-items: center; justify-content: center; }
+        .modal { background: var(--surface); border: 1px solid var(--border); width: 100%; max-width: 500px; border-radius: 8px; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .modal h3 { font-size: 1.1rem; margin-bottom: 1.2rem; }
+        .form-row { margin-bottom: 1rem; }
+        .form-row.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        label { display: block; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 0.3rem; }
+        input, select { width: 100%; background: #090d16; border: 1px solid var(--border); border-radius: 4px; padding: 0.55rem; color: white; font-size: 0.85rem; }
+        input:focus, select:focus { outline: 1px solid var(--primary); border-color: var(--primary); }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 1.5rem; }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <header>
+        <div class="brand">LibEdge<span>// Multi-Camera Dynamic Topology</span></div>
+        <button class="btn btn-primary" onclick="openModal()">+ Add New Camera</button>
+    </header>
+
+    <div class="summary-bar">
+        <div class="summary-card">
+            <small>Active Cameras</small>
+            <div class="val" id="sumCams">0</div>
+        </div>
+        <div class="summary-card">
+            <small>Total Detected Seats</small>
+            <div class="val" id="sumSeats">0</div>
+        </div>
+        <div class="summary-card">
+            <small>Current Occupancy</small>
+            <div class="val" style="color:#60a5fa" id="sumOcc">0</div>
+        </div>
+        <div class="summary-card">
+            <small>Available Seats</small>
+            <div class="val" style="color:#34d399" id="sumVac">0</div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header-row">
+            <h2>Configured Camera Nodes</h2>
+            <small style="color:var(--text-muted)">Auto-refreshes live occupancy every 3s</small>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Floor & Zone</th>
+                    <th>Camera / Label</th>
+                    <th>Stream Source</th>
+                    <th>Poll Interval</th>
+                    <th>Dynamic State</th>
+                    <th>Last Sample</th>
+                    <th style="text-align: right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="cameraRows"></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal-backdrop" id="camModal">
+    <div class="modal">
+        <h3 id="modalTitle">Configure Camera</h3>
+        <form id="camForm">
+            <input type="hidden" id="editMode" value="false">
+            <div class="form-row two-col">
+                <div>
+                    <label>Camera ID</label>
+                    <input type="text" id="m_id" placeholder="cam_01" required>
+                </div>
+                <div>
+                    <label>Camera Label</label>
+                    <input type="text" id="m_name" placeholder="Quiet Hall 1" required>
+                </div>
+            </div>
+            <div class="form-row two-col">
+                <div>
+                    <label>Floor</label>
+                    <input type="text" id="m_floor" placeholder="Floor 1" required>
+                </div>
+                <div>
+                    <label>Zone Name</label>
+                    <input type="text" id="m_zone" placeholder="Zone A" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <label>Stream Source (RTSP Link or Video Path)</label>
+                <input type="text" id="m_source" placeholder="dataset/raw/library.mp4 or rtsp://..." required>
+            </div>
+            <div class="form-row">
+                <label>Sampling Frequency</label>
+                <select id="m_interval">
+                    <option value="15">Every 15 Seconds</option>
+                    <option value="30" selected>Every 30 Seconds</option>
+                    <option value="60">Every 1 Minute</option>
+                    <option value="120">Every 2 Minutes</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-edit" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Mapping</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let globalCams = [];
+
+async function fetchAndRender() {
+    try {
+        const res = await fetch('/api/cameras');
+        globalCams = await res.json();
+        
+        let totalSeats = 0, totalOcc = 0, totalVac = 0;
+        const tbody = document.getElementById('cameraRows');
+        tbody.innerHTML = '';
+
+        globalCams.forEach(cam => {
+            const seats = parseInt(cam.total_seats || 0);
+            const occ = parseInt(cam.occupied || 0);
+            const vac = parseInt(cam.vacant || 0);
+
+            totalSeats += seats;
+            totalOcc += occ;
+            totalVac += vac;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <strong>${cam.floor}</strong><br>
+                    <span style="color:var(--text-muted); font-size:0.75rem">${cam.zone}</span>
+                </td>
+                <td>
+                    <strong>${cam.name}</strong><br>
+                    <span style="font-family:monospace; color:var(--text-muted); font-size:0.75rem">${cam.id}</span>
+                </td>
+                <td><code style="color:#38bdf8; font-size:0.75rem">${cam.source}</code></td>
+                <td>Every ${cam.interval_sec}s</td>
+                <td>
+                    <span class="pill pill-tot">${seats} Total</span>
+                    <span class="pill pill-occ">${occ} Occ</span>
+                    <span class="pill pill-vac">${vac} Vac</span>
+                </td>
+                <td>
+                    <span class="pill pill-status ${cam.status === 'Active' ? 'active' : ''}">${cam.last_tested}</span>
+                </td>
+                <td style="text-align: right">
+                    <button class="btn btn-test" onclick="triggerTest('${cam.id}')">Test Now</button>
+                    <button class="btn btn-edit" onclick="editCamera('${cam.id}')">Edit</button>
+                    <button class="btn btn-del" onclick="deleteCamera('${cam.id}')">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('sumCams').innerText = globalCams.length;
+        document.getElementById('sumSeats').innerText = totalSeats;
+        document.getElementById('sumOcc').innerText = totalOcc;
+        document.getElementById('sumVac').innerText = totalVac;
+
+    } catch (e) {
+        console.error("Poll failure:", e);
+    }
+}
+
+function openModal(isEdit = false) {
+    document.getElementById('editMode').value = isEdit ? "true" : "false";
+    document.getElementById('modalTitle').innerText = isEdit ? "Edit Camera Mapping" : "Add New Camera Mapping";
+    document.getElementById('m_id').disabled = isEdit;
+    document.getElementById('camModal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('camModal').style.display = 'none';
+    document.getElementById('camForm').reset();
+}
+
+function editCamera(id) {
+    const cam = globalCams.find(c => c.id === id);
+    if (!cam) return;
+    document.getElementById('m_id').value = cam.id;
+    document.getElementById('m_name').value = cam.name;
+    document.getElementById('m_floor').value = cam.floor;
+    document.getElementById('m_zone').value = cam.zone;
+    document.getElementById('m_source').value = cam.source;
+    document.getElementById('m_interval').value = cam.interval_sec;
+    openModal(true);
+}
+
+document.getElementById('camForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        id: document.getElementById('m_id').value,
+        name: document.getElementById('m_name').value,
+        floor: document.getElementById('m_floor').value,
+        zone: document.getElementById('m_zone').value,
+        source: document.getElementById('m_source').value,
+        interval_sec: parseInt(document.getElementById('m_interval').value)
+    };
+
+    await fetch('/api/cameras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    closeModal();
+    fetchAndRender();
+});
+
+async function deleteCamera(id) {
+    if (!confirm(`Delete camera ${id}?`)) return;
+    await fetch(`/api/cameras/${id}`, { method: 'DELETE' });
+    fetchAndRender();
+}
+
+async function triggerTest(id) {
+    const btn = event.target;
+    btn.innerText = 'Sampling...';
+    btn.disabled = true;
+    try {
+        await fetch(`/api/cameras/${id}/test-now`, { method: 'POST' });
+        await fetchAndRender();
+    } finally {
+        btn.innerText = 'Test Now';
+        btn.disabled = false;
+    }
+}
+
+fetchAndRender();
+setInterval(fetchAndRender, 3000);
+</script>
+</body>
+</html>

@@ -74,6 +74,7 @@ def load_internal_store():
                 "total_seats": 0,
                 "occupied": 0,
                 "vacant": 0,
+                "seats": [],
                 "last_tested": "Never",
                 "status": "Initialized"
             }
@@ -120,7 +121,7 @@ def compute_iou(boxA, boxB):
 
 
 def analyze_frame_dynamically(frame, person_conf=0.25, chair_conf=0.17):
-    """Detects chairs and sitting people dynamically from the frame using explicit confidence thresholds."""
+    """Detects chairs and sitting people dynamically, clustering chairs into rows and structured IDs."""
     h, w = frame.shape[:2]
     imgsz = min(max(w, h), 960)
 
@@ -151,26 +152,57 @@ def analyze_frame_dynamically(frame, person_conf=0.25, chair_conf=0.17):
         conf = float(box.conf[0].cpu().numpy())
         bw = b[2] - b[0]
         bh = b[3] - b[1]
-        # Ignore wide benches or long tables misdetected as chairs
         if cls_id == 56 and conf >= chair_conf and (bw / float(bh)) <= 1.6:
             raw_chairs.append(b)
 
-    # 3. Associate chairs with sitting people
+    # 3. Spatial Row Clustering & Column Sorting
+    raw_chairs = sorted(raw_chairs, key=lambda c: c[1])
+    rows = []
+    current_row = []
+    row_threshold = 45  # Pixel tolerance to group chairs into the same horizontal row
+
+    for c in raw_chairs:
+        if not current_row:
+            current_row.append(c)
+        else:
+            avg_y = sum(item[1] for item in current_row) / len(current_row)
+            if abs(c[1] - avg_y) <= row_threshold:
+                current_row.append(c)
+            else:
+                rows.append(current_row)
+                current_row = [c]
+    if current_row:
+        rows.append(current_row)
+
+    structured_seats = []
     occupied_count = 0
     vacant_count = 0
 
-    for cbox in raw_chairs:
-        is_occupied = any(
-            box_contains_point(cbox, p["hip"]) or compute_iou(cbox, p["box"]) > 0.15
-            for p in seated_people
-        )
-        if is_occupied:
-            occupied_count += 1
-        else:
-            vacant_count += 1
+    for r_idx, row in enumerate(rows):
+        row_sorted = sorted(row, key=lambda c: c[0])
+        for s_idx, cbox in enumerate(row_sorted):
+            seat_id = f"R{r_idx+1}S{s_idx+1}"
+            is_occupied = any(
+                box_contains_point(cbox, p["hip"]) or compute_iou(cbox, p["box"]) > 0.15
+                for p in seated_people
+            )
+            if is_occupied:
+                occupied_count += 1
+                status = "Occupied"
+            else:
+                vacant_count += 1
+                status = "Vacant"
+
+            structured_seats.append({
+                "seat_id": seat_id,
+                "row": r_idx + 1,
+                "seat": s_idx + 1,
+                "box": cbox.tolist(),
+                "status": status
+            })
 
     total_seats = occupied_count + vacant_count
-    return total_seats, occupied_count, vacant_count
+    return total_seats, occupied_count, vacant_count, structured_seats
 
 
 def run_camera_test(cam):
@@ -189,7 +221,6 @@ def run_camera_test(cam):
 
     ret, frame = False, None
     if is_live:
-        # Flush stream buffer for live feeds to get the latest frame
         for _ in range(5):
             ret, frame = cap.read()
             if not ret:
@@ -204,10 +235,11 @@ def run_camera_test(cam):
         cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
         return
 
-    total, occ, vac = analyze_frame_dynamically(frame, person_conf, chair_conf)
+    total, occ, vac, seats = analyze_frame_dynamically(frame, person_conf, chair_conf)
     cam["total_seats"] = total
     cam["occupied"] = occ
     cam["vacant"] = vac
+    cam["seats"] = seats
     cam["status"] = "Active"
     cam["last_tested"] = datetime.now().strftime("%H:%M:%S")
 
@@ -289,6 +321,7 @@ async def save_camera(data: CameraModel):
         "total_seats": 0,
         "occupied": 0,
         "vacant": 0,
+        "seats": [],
         "last_tested": "Pending",
         "status": "Initialized"
     }
@@ -316,6 +349,7 @@ async def test_camera_now(cam_id: str):
                 "status": "success", 
                 "total_seats": c["total_seats"], 
                 "occupied": c["occupied"], 
-                "vacant": c["vacant"]
+                "vacant": c["vacant"],
+                "seats": c["seats"]
             }
     return JSONResponse(status_code=404, content={"status": "not found"})

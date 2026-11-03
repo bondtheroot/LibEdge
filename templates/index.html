@@ -66,18 +66,21 @@
         .pill-status { background: rgba(30, 41, 59, 0.6); color: var(--text-muted); border: 1px solid var(--border-subtle); }
         .pill-status.active { color: #34d399; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
 
-        .btn { padding: 0.55rem 1rem; border-radius: var(--radius-sm); border: none; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.4rem; }
+        .btn { padding: 0.55rem 1rem; border-radius: var(--radius-sm); border: none; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem; }
         .btn-primary { background: var(--primary); color: white; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3); }
         .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
         .btn-edit { background: #1e293b; color: var(--text-main); border: 1px solid var(--border-subtle); margin-right: 0.3rem; }
         .btn-edit:hover { background: #334155; }
         .btn-test { background: rgba(2, 132, 199, 0.15); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.3); margin-right: 0.3rem; }
         .btn-test:hover { background: rgba(2, 132, 199, 0.25); }
+        .btn-video { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); margin-right: 0.3rem; }
+        .btn-video:hover { background: rgba(16, 185, 129, 0.25); }
         .btn-del { background: transparent; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
         .btn-del:hover { background: rgba(239, 68, 68, 0.15); }
 
         .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(7, 9, 14, 0.8); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; }
         .modal { background: var(--bg-surface); border: 1px solid var(--border-subtle); width: 100%; max-width: 540px; border-radius: var(--radius-lg); padding: 2rem; box-shadow: 0 20px 40px rgba(0,0,0,0.7); animation: modalIn 0.25s ease-out; }
+        .modal.video-modal { max-width: 800px; }
         @keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
         
         .modal h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1.5rem; color: var(--text-main); }
@@ -87,6 +90,7 @@
         input, select { width: 100%; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.65rem 0.85rem; color: var(--text-main); font-size: 0.9rem; transition: border-color 0.15s; }
         input:focus, select:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15); }
         .modal-actions { display: flex; justify-content: flex-end; gap: 0.8rem; margin-top: 2rem; }
+        video { width: 100%; border-radius: var(--radius-sm); background: #000; outline: none; }
     </style>
 </head>
 <body>
@@ -192,6 +196,19 @@
     </div>
 </div>
 
+<!-- Video Preview Modal -->
+<div class="modal-backdrop" id="videoModal">
+    <div class="modal video-modal">
+        <h3 id="videoModalTitle">Recorded 5s Accuracy Test</h3>
+        <div class="form-row">
+            <video id="testVideoPlayer" controls autoplay></video>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-edit" onclick="closeVideoModal()">Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
 let globalCams = [];
 
@@ -240,7 +257,8 @@ async function fetchAndRender() {
                     <span class="pill pill-status ${cam.status.includes('Active') ? 'active' : ''}">${cam.last_tested}</span>
                 </td>
                 <td style="text-align: right">
-                    <button class="btn btn-test" onclick="triggerTest('${cam.id}')" title="Record & Test 5s Window">5s Accuracy Test</button>
+                    ${cam.output_video ? `<button class="btn btn-video" onclick="openVideoModal('${cam.output_video}', '${cam.name}')">View Video</button>` : ''}
+                    <button class="btn btn-test" onclick="triggerTest('${cam.id}')" title="Record & Test 5s Window">5s Test</button>
                     <button class="btn btn-edit" onclick="editCamera('${cam.id}')">Edit</button>
                     <button class="btn btn-del" onclick="deleteCamera('${cam.id}')">Delete</button>
                 </td>
@@ -268,6 +286,21 @@ function openModal(isEdit = false) {
 function closeModal() {
     document.getElementById('camModal').style.display = 'none';
     document.getElementById('camForm').reset();
+}
+
+function openVideoModal(videoUrl, camName) {
+    document.getElementById('videoModalTitle').innerText = `Recorded 5s Test - ${camName}`;
+    const player = document.getElementById('testVideoPlayer');
+    player.src = videoUrl;
+    document.getElementById('videoModal').style.display = 'flex';
+    player.play();
+}
+
+function closeVideoModal() {
+    const player = document.getElementById('testVideoPlayer');
+    player.pause();
+    player.src = '';
+    document.getElementById('videoModal').style.display = 'none';
 }
 
 function editCamera(id) {
@@ -322,7 +355,11 @@ async function triggerTest(id) {
         const res = await fetch(`/api/cameras/${id}/test-now`, { method: 'POST' });
         const data = await res.json();
         await fetchAndRender();
-        alert(`5s Accuracy Test Complete!\nTotal Seats: ${data.total_seats}\nOccupied: ${data.occupied}\nVacant: ${data.vacant}`);
+        if (data.output_video) {
+            openVideoModal(data.output_video, id);
+        } else {
+            alert(`5s Accuracy Test Complete!\nTotal Seats: ${data.total_seats}\nOccupied: ${data.occupied}\nVacant: ${data.vacant}`);
+        }
     } finally {
         btn.innerText = originalText;
         btn.disabled = false;
